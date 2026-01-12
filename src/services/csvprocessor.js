@@ -2,7 +2,7 @@ const csv = require('csv-parser');
 const { Readable } = require('stream');
 const logger = require('../utils/logger');
 const config = require('../config');
-const { normalizeCSVRow, mapCSVToSchema, objectToCSV } = require('../utils/csv-helpers');
+const { normalizeCSVRow, mapCSVToSchema } = require('../utils/csv-helpers');
 
 class CSVprocessor {
   constructor(dbService) {
@@ -33,7 +33,8 @@ class CSVprocessor {
     const client = await this.dbService.pool.connect();
     let successCount = 0;
     let errorCount = 0;
-    const missingFieldErrors = []; // NEW: Track missing field details
+    const missingFieldErrors = []; // Track missing field details
+    const csvRemark = []; // Issue marked in error row
 
     try {
       await client.query('BEGIN');
@@ -63,6 +64,7 @@ class CSVprocessor {
             )
 
             if (missingFields.length) {
+              errorCount++;
               const errorDetail = {
                 ...row,
                 reason: `Missing required fields: ${missingFields.join(', ')}`,
@@ -70,6 +72,7 @@ class CSVprocessor {
               };
 
               missingFieldErrors.push(errorDetail);
+              csvRemark.push(errorDetail)
 
               logger.error('Skipping row with missing key', {
                 rowNumber,
@@ -80,6 +83,7 @@ class CSVprocessor {
               });
             } else if (missingFields.length = 0) {
               const result = await this.dbService.insertStageRow(client, mappedRow, fileName);
+              csvRemark.push(mappedRow)
               successCount++;
               logger.info('Row inserted successfully', {
                 fileName,
@@ -98,6 +102,7 @@ class CSVprocessor {
               missingField: 'ERROR'
             };
             missingFieldErrors.push(errorDetail);
+            csvRemark.push(errorDetail)
 
             logger.error('Error inserting row', {
               rowNumber,
@@ -133,8 +138,8 @@ class CSVprocessor {
     } finally {
       client.release();
     }
-    
-    return { successCount, errorCount, missingFieldErrors }; // NEW: Return error details
+
+    return { successCount, errorCount, missingFieldErrors, csvRemark }; // NEW: Return error details
   }
 }
 

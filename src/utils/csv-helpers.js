@@ -71,17 +71,19 @@ function logCSVHeaders(row) {
 }
 
 function objectToCSV(data) {
-  if (!data.length) return '';
+    if (!data.length) return '';
 
-  const headers = Object.keys(data[0]).join(',');
+    const headers = Object.keys(data[0]).join(',');
 
-  const rows = data.map(row =>
-    Object.values(row)
-      .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`)
-      .join(',')
-  );
+    const rows = data.map(row =>
+        Object.values(row)
+            .map(v => `"${String(v ?? '')
+                .replace(/\r?\n/g, ' ')
+                .replace(/"/g, '""')}"`)
+            .join(',')
+    );
 
-  return [headers, ...rows].join('\n');
+    return [headers, ...rows].join('\n');
 }
 
 module.exports = {

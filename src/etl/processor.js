@@ -1,6 +1,7 @@
 const logger = require('../utils/logger');
 const fs = require('fs/promises');
 const path = require('path');
+const { objectToCSV } = require('../utils/csv-helpers');
 
 class ETLProcessor {
     constructor(s3Service, dbService, csvProcessor) {
@@ -67,19 +68,36 @@ class ETLProcessor {
     }
 
     /**
-     * SKIPPING SUMMARY REPORT FOR NOW   IMP
      * Append summary to log file
-     * NEW METHOD
      */
     async appendSummaryToLog(fileName, results) {
         try {
             const logFilePath = path.join('./logs', 'combined.log');
-            // const summary = this.generateSummaryReport(fileName, results);
+            const summary = this.generateSummaryReport(fileName, results);
 
-            // await fs.appendFile(logFilePath, summary);
-            // logger.info('Summary report appended to log file', { logFilePath });
+            await fs.appendFile(logFilePath, summary);
+            logger.info('Summary report appended to log file', { logFilePath });
 
             return logFilePath;
+        } catch (error) {
+            logger.error('Error appending summary to log', { error: error.message });
+            throw error;
+        }
+    }
+
+
+    /**
+     * Create CSV file with remark
+     */
+    async createRemarkCSV(fileName, results) {
+        try {
+            const remarkCSVFilePath = path.join('./logs', fileName);
+            // const summary = this.generateSummaryReport(fileName, results);
+
+            await fs.writeFile(remarkCSVFilePath, results);
+            // logger.info('Summary report appended to log file', { remarkCSVFilePath });
+
+            return remarkCSVFilePath;
         } catch (error) {
             logger.error('Error appending summary to log', { error: error.message });
             throw error;
@@ -133,7 +151,7 @@ class ETLProcessor {
             });
             logger.info('Validating rows (caseid and productid are required)', { fileName });
 
-            const { successCount, errorCount, missingFieldErrors } = await this.csvProcessor.processRows(rows, fileName);
+            const { successCount, errorCount, missingFieldErrors, csvRemark } = await this.csvProcessor.processRows(rows, fileName);
 
             logger.info('Stage table populated', {
                 successCount,
@@ -155,25 +173,31 @@ class ETLProcessor {
 
             const duration = Date.now() - startTime;
 
-            // const results = {
-            //     rowCount: rows.length,
-            //     successCount,
-            //     errorCount,
-            //     missingFieldErrors,
-            //     duration
-            // };
-            const results = objectToCSV(missingFieldErrors)
-
+            
+            const results = {
+                rowCount: rows.length,
+                successCount,
+                errorCount,
+                missingFieldErrors,
+                duration
+            };
+            
             // NEW: 6. Generate and append summary to log
             logger.info('Step 6: Generating summary report', { fileName });
             const logFilePath = await this.appendSummaryToLog(fileName, results);
+            
+            
+            if (errorCount > 0) {
+                const updatesCSVRemark = objectToCSV(csvRemark)
+                const remarkCSVFilePath = await this.createRemarkCSV(fileName, updatesCSVRemark);
 
-            // NEW: 7. Upload log file to S3
-            logger.info('Step 7: Uploading log file to S3', { fileName });
-            const s3LogKey = await this.s3Service.uploadLogFile(
-                logFilePath,
-                `${fileName}`
-            );
+                // NEW: 7. Upload log file to S3
+                logger.info('Step 7: Uploading log file to S3', { fileName });
+                const s3LogKey = await this.s3Service.uploadLogFile(
+                    remarkCSVFilePath,
+                    `${fileName}`
+                );
+            }
             logger.info('Log file uploaded successfully', { s3LogKey });
 
             logger.info('✓ File processing completed successfully', {
@@ -184,7 +208,7 @@ class ETLProcessor {
                 skippedReason: errorCount > 0 ? 'Missing caseid or productid' : 'None',
                 duration: `${duration}ms`,
                 durationSeconds: `${(duration / 1000).toFixed(2)}s`,
-                logFileS3: s3LogKey
+                // logFileS3: s3LogKey
             });
             logger.info('='.repeat(80));
 
@@ -197,7 +221,7 @@ class ETLProcessor {
                 missingFieldErrors,
                 duration,
                 processedAt: new Date().toISOString(),
-                logFileS3: s3LogKey
+                // logFileS3: s3LogKey
             };
 
         } catch (error) {
