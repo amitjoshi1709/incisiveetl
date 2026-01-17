@@ -1,98 +1,88 @@
+/**
+ * Application Configuration
+ * =========================
+ * Central configuration module for the ETL service.
+ *
+ * Configuration is loaded from environment variables.
+ * See .env.example for required variables.
+ *
+ * Note: Pipeline-specific S3 paths are handled by each pipeline
+ * using their own environment variable (e.g., SOURCEPATH, LAB_PRODUCT_SOURCEPATH)
+ */
+
 require('dotenv').config();
 
 /**
- * Get required environment variable or throw error
- */
-function getRequiredEnv(name) {
-    const value = process.env[name];
-    if (!value) {
-        throw new Error(`Missing required environment variable: ${name}`);
-    }
-    return value;
-}
-
-/**
- * Get optional environment variable with default
+ * Get optional environment variable with default value
+ * @param {string} name - Environment variable name
+ * @param {string} defaultValue - Default if not set
+ * @returns {string}
  */
 function getOptionalEnv(name, defaultValue) {
     return process.env[name] || defaultValue;
 }
 
 /**
- * Build pipeline paths from base path
+ * Parse boolean from environment variable
+ * @param {string} name - Environment variable name
+ * @param {boolean} defaultValue - Default if not set
+ * @returns {boolean}
  */
-function buildPipelinePaths(basePath) {
-    if (!basePath) {
-        return { sourcePath: null, processedPath: null, logsPath: null };
-    }
-    return {
-        sourcePath: `${basePath}/`,
-        processedPath: `${basePath}/processed/`,
-        logsPath: `${basePath}/logs/`
-    };
+function getBooleanEnv(name, defaultValue) {
+    const value = process.env[name];
+    if (value === undefined) return defaultValue;
+    return value === 'true' || value === '1';
 }
 
-// Build paths for each pipeline
-const ordersPaths = buildPipelinePaths(process.env.SOURCEPATH);
-const labProductPaths = buildPipelinePaths(process.env.LAB_PRODUCT_SOURCEPATH);
-const labPracticePaths = buildPipelinePaths(process.env.LAB_PRACTICE_SOURCEPATH);
-const labProductMappingPaths = buildPipelinePaths(process.env.LAB_PRODUCT_MAPPING_SOURCEPATH);
-const labPracticeMappingPaths = buildPipelinePaths(process.env.LAB_PRACTICE_MAPPING_SOURCEPATH);
-const dentalGroupsPaths = buildPipelinePaths(process.env.DENTAL_GROUPS_SOURCEPATH);
-
 module.exports = {
+    /**
+     * AWS / S3 Configuration
+     * Pipeline-specific paths are loaded from env vars by each pipeline
+     */
     aws: {
         region: getOptionalEnv('AWS_REGION', 'us-east-1'),
         bucket: getOptionalEnv('S3_BUCKET', 'dev-incisive-data-csv'),
-
-        // Orders pipeline paths
-        sourcePath: ordersPaths.sourcePath,
-        processedPath: ordersPaths.processedPath,
-        logsPath: ordersPaths.logsPath,
-
-        // Lab product pipeline paths
-        lab_product_sourcepath: labProductPaths.sourcePath,
-        lab_product_processedPath: labProductPaths.processedPath,
-        lab_product_logsPath: labProductPaths.logsPath,
-
-        // Lab practice pipeline paths
-        lab_practice_sourcepath: labPracticePaths.sourcePath,
-        lab_practice_processedPath: labPracticePaths.processedPath,
-        lab_practice_logsPath: labPracticePaths.logsPath,
-
-        // Lab product mapping pipeline paths
-        lab_product_mapping_sourcepath: labProductMappingPaths.sourcePath,
-        lab_product_mapping_processedPath: labProductMappingPaths.processedPath,
-        lab_product_mapping_logsPath: labProductMappingPaths.logsPath,
-
-        // Lab practice mapping pipeline paths
-        lab_practice_mapping_sourcepath: labPracticeMappingPaths.sourcePath,
-        lab_practice_mapping_processedPath: labPracticeMappingPaths.processedPath,
-        lab_practice_mapping_logsPath: labPracticeMappingPaths.logsPath,
-
-        // Dental groups pipeline paths
-        dental_groups_sourcepath: dentalGroupsPaths.sourcePath,
-        dental_groups_processedPath: dentalGroupsPaths.processedPath,
-        dental_groups_logsPath: dentalGroupsPaths.logsPath,
-
         credentials: {
             accessKeyId: process.env.AWS_ACCESS_KEY_ID,
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
         }
     },
+
+    /**
+     * Database Configuration
+     */
     db: {
         host: getOptionalEnv('DB_HOST', 'localhost'),
         port: parseInt(getOptionalEnv('DB_PORT', '5432'), 10),
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         database: getOptionalEnv('DB_NAME', 'postgres'),
+        // Set search path for ETL schema
         options: '-c search_path=etl,public',
+        // Connection pool settings
         max: parseInt(getOptionalEnv('DB_POOL_MAX', '10'), 10),
         idleTimeoutMillis: parseInt(getOptionalEnv('DB_IDLE_TIMEOUT', '30000'), 10),
         connectionTimeoutMillis: parseInt(getOptionalEnv('DB_CONNECT_TIMEOUT', '2000'), 10),
-        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' } : false
+        // SSL configuration
+        ssl: getBooleanEnv('DB_SSL', false)
+            ? { rejectUnauthorized: !getBooleanEnv('DB_SSL_REJECT_UNAUTHORIZED', true) }
+            : false
     },
+
+    /**
+     * Processing Configuration
+     */
     processing: {
+        // Number of rows to process per batch
         batchSize: parseInt(getOptionalEnv('BATCH_SIZE', '100'), 10)
+    },
+
+    /**
+     * Logging Configuration
+     */
+    logging: {
+        level: getOptionalEnv('LOG_LEVEL', 'info'),
+        // Directory for local log files
+        directory: getOptionalEnv('LOG_DIR', './logs')
     }
 };
