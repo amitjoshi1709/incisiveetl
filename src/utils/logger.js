@@ -8,6 +8,16 @@ if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
 }
 
+// Console format for readable terminal output
+const consoleFormat = winston.format.combine(
+    winston.format.colorize(),
+    winston.format.timestamp({ format: 'HH:mm:ss' }),
+    winston.format.printf(({ timestamp, level, message, ...meta }) => {
+        const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+        return `${timestamp} ${level}: ${message}${metaStr}`;
+    })
+);
+
 // Default logger for general/combined logs
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
@@ -26,6 +36,13 @@ const logger = winston.createLogger({
         })
     ]
 });
+
+// Add console transport if LOG_TO_CONSOLE is enabled
+if (process.env.LOG_TO_CONSOLE === 'true') {
+    logger.add(new winston.transports.Console({
+        format: consoleFormat
+    }));
+}
 
 // Cache for pipeline-specific loggers
 const pipelineLoggers = {};
@@ -81,6 +98,13 @@ function getPipelineLogger(pipelineName) {
             })
         ]
     });
+
+    // Add console transport if LOG_TO_CONSOLE is enabled
+    if (process.env.LOG_TO_CONSOLE === 'true') {
+        pipelineLogger.add(new winston.transports.Console({
+            format: consoleFormat
+        }));
+    }
 
     // Cache the logger
     pipelineLoggers[pipelineName] = pipelineLogger;
