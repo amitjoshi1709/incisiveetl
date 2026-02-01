@@ -264,7 +264,7 @@ class Orchestrator {
             // ==================== STEP 8: DELETE ORIGINAL FILE FROM SOURCE ====================
             pipelineLogger.info('Step 8: Deleting original file from source folder');
             try {
-                // await this.s3Handler.deleteFile(fileName, paths.sourcePath);
+                await this.s3Handler.deleteFile(fileName, paths.sourcePath);
                 pipelineLogger.info('Step 8 completed: Original file deleted from source');
             } catch (error) {
                 pipelineLogger.error('Error deleting original file from source');

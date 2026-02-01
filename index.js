@@ -77,6 +77,37 @@ module.exports = {
     config
 };
 
+// ==================== Helper Functions ====================
+
+/**
+ * Map of pipelines to their corresponding extractors
+ * When a pipeline runs, its extractor (if any) runs first
+ */
+const PIPELINE_EXTRACTORS = {
+    'dental-groups': 'dental-groups'  // SF dental-groups -> S3 -> RDS
+};
+
+/**
+ * Run extractor for a pipeline if one exists
+ * @param {string} pipelineName - Name of the pipeline
+ * @returns {Promise<Object|null>} Extraction result or null if no extractor
+ */
+async function runExtractorForPipeline(pipelineName) {
+    const extractorName = PIPELINE_EXTRACTORS[pipelineName];
+    if (!extractorName || !SalesforceExtractor.hasExtractor(extractorName)) {
+        return null;
+    }
+
+    logger.info(`Running extractor before pipeline: ${extractorName}`);
+    const extractor = new SalesforceExtractor(config.salesforce, s3Handler);
+    const result = await extractor.extract(extractorName);
+    logger.info(`Extractor ${extractorName} completed`, {
+        recordCount: result.recordCount,
+        s3Key: result.s3Key
+    });
+    return result;
+}
+
 // ==================== CLI Execution ====================
 
 if (require.main === module) {
@@ -139,6 +170,18 @@ if (require.main === module) {
             // Process all pipelines
             if (!command || command === 'all') {
                 logger.info('Processing all pipelines...');
+
+                // Run all extractors first
+                for (const pipelineName of Object.keys(PIPELINE_EXTRACTORS)) {
+                    try {
+                        await runExtractorForPipeline(pipelineName);
+                    } catch (error) {
+                        logger.error(`Extractor failed for ${pipelineName}, continuing with ETL`, {
+                            error: error.message
+                        });
+                    }
+                }
+
                 const results = await orchestrator.processAllPipelines();
                 logger.info('All pipelines completed', {
                     totalProcessed: results.processed,
@@ -152,6 +195,15 @@ if (require.main === module) {
             // Process specific pipeline
             const available = orchestrator.getAvailablePipelines();
             if (available.includes(command)) {
+                // Run extractor first if one exists for this pipeline
+                try {
+                    await runExtractorForPipeline(command);
+                } catch (error) {
+                    logger.error(`Extractor failed for ${command}, continuing with ETL`, {
+                        error: error.message
+                    });
+                }
+
                 logger.info(`Processing pipeline: ${command}`);
                 const result = await orchestrator.processPipeline(command);
                 logger.info(`Pipeline ${command} completed`, {
