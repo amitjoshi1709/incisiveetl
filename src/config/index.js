@@ -49,6 +49,19 @@ module.exports = {
     },
 
     /**
+     * Salesforce Configuration
+     * Used for extracting data from Salesforce via JWT authentication
+     */
+    salesforce: {
+        loginUrl: getOptionalEnv('SF_LOGIN_URL', 'https://login.salesforce.com'),
+        clientId: process.env.SF_CLIENT_ID,
+        username: process.env.SF_USERNAME,
+        privateKeyPath: process.env.SF_PRIVATE_KEY_PATH,
+        privateKey: process.env.SF_PRIVATE_KEY, // Alternative: key content directly (for Docker)
+        apiVersion: getOptionalEnv('SF_API_VERSION', '59.0')
+    },
+
+    /**
      * Database Configuration
      */
     db: {

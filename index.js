@@ -4,10 +4,12 @@
  * Main entry point for the ETL service.
  *
  * Usage:
- *   node index.js                    # Process all pipelines
- *   node index.js all                # Process all pipelines
- *   node index.js <pipeline-name>    # Process specific pipeline
- *   node index.js list               # List available pipelines
+ *   node index.js                           # Process all pipelines
+ *   node index.js all                       # Process all pipelines
+ *   node index.js <pipeline-name>           # Process specific pipeline
+ *   node index.js list                      # List available pipelines
+ *   node index.js extract <extractor-name>  # Extract data from external source
+ *   node index.js extract list              # List available extractors
  *
  * Available pipelines:
  *   - orders
@@ -16,6 +18,9 @@
  *   - lab-product-mapping
  *   - lab-practice-mapping
  *   - dental-groups
+ *
+ * Available extractors:
+ *   - dental-groups (Salesforce -> S3)
  *
  * To add a new pipeline:
  *   1. Copy src/pipelines/_template to src/pipelines/<your-pipeline>
@@ -28,6 +33,7 @@ const config = require('./src/config');
 const { S3Handler, DatabaseConnection } = require('./src/core');
 const Orchestrator = require('./src/etl/Orchestrator');
 const pipelines = require('./src/pipelines');
+const { SalesforceExtractor } = require('./src/extractors');
 const logger = require('./src/utils/logger');
 
 // ==================== Initialize Services ====================
@@ -75,16 +81,57 @@ module.exports = {
 
 if (require.main === module) {
     const command = process.argv[2];
+    const subCommand = process.argv[3];
 
     (async () => {
         try {
+            // ==================== EXTRACT COMMAND ====================
+            if (command === 'extract') {
+                // List available extractors
+                if (subCommand === 'list' || !subCommand) {
+                    const extractors = SalesforceExtractor.getAvailableExtractors();
+                    console.log('\nAvailable extractors:');
+                    extractors.forEach(name => console.log(`  - ${name}`));
+                    console.log('\nUsage: node index.js extract <extractor-name>');
+                    console.log('       node index.js extract list\n');
+                    await shutdown();
+                    return;
+                }
+
+                // Run specific extractor
+                if (SalesforceExtractor.hasExtractor(subCommand)) {
+                    logger.info(`Running extractor: ${subCommand}`);
+                    const extractor = new SalesforceExtractor(config.salesforce, s3Handler);
+                    const result = await extractor.extract(subCommand);
+                    logger.info(`Extractor ${subCommand} completed`, {
+                        recordCount: result.recordCount,
+                        s3Key: result.s3Key
+                    });
+                    console.log(`\nExtraction complete!`);
+                    console.log(`  Records: ${result.recordCount}`);
+                    console.log(`  File: s3://${result.bucket}/${result.s3Key}\n`);
+                    await shutdown();
+                    return;
+                }
+
+                // Unknown extractor
+                console.error(`\nUnknown extractor: ${subCommand}`);
+                const extractors = SalesforceExtractor.getAvailableExtractors();
+                console.log('\nAvailable extractors:');
+                extractors.forEach(name => console.log(`  - ${name}`));
+                console.log('\nUsage: node index.js extract <extractor-name>\n');
+                process.exit(1);
+            }
+
+            // ==================== LIST COMMAND ====================
             // Show available pipelines
             if (command === 'list') {
                 const available = orchestrator.getAvailablePipelines();
                 console.log('\nAvailable pipelines:');
                 available.forEach(name => console.log(`  - ${name}`));
                 console.log('\nUsage: node index.js <pipeline-name>');
-                console.log('       node index.js all\n');
+                console.log('       node index.js all');
+                console.log('       node index.js extract <extractor-name>\n');
                 await shutdown();
                 return;
             }
@@ -122,7 +169,8 @@ if (require.main === module) {
             available.forEach(name => console.log(`  - ${name}`));
             console.log('\nUsage: node index.js <pipeline-name>');
             console.log('       node index.js all');
-            console.log('       node index.js list\n');
+            console.log('       node index.js list');
+            console.log('       node index.js extract <extractor-name>\n');
             process.exit(1);
 
         } catch (error) {
