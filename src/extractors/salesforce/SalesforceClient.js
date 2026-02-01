@@ -50,7 +50,8 @@ class SalesforceClient {
      */
     getPrivateKey() {
         if (this.privateKeyContent) {
-            return this.privateKeyContent;
+            // Convert literal \n to actual newlines (needed when key is from env var)
+            return this.privateKeyContent.replace(/\\n/g, '\n');
         }
         if (this.privateKeyPath) {
             return fs.readFileSync(this.privateKeyPath, 'utf8');
