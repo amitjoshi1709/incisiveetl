@@ -99,6 +99,7 @@ class MagicTouchExtractor {
 
             // Base case data (matching Orders ETL expected columns)
             const baseRow = {
+                labid: 2,  // Hardcoded lab_id for MagicTouch orders
                 submissiondate: this.formatDate(c.submissionDate),
                 shippingdate: this.formatDate(c.shipDate),
                 casedate: this.formatDate(c.dateIn),

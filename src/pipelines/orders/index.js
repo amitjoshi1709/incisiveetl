@@ -54,7 +54,10 @@ class OrdersPipeline extends BasePipeline {
      * Transform CSV row to database schema
      */
     mapRow(row) {
+        const labId = row.labid ? Number(row.labid) : null;
+
         return {
+            lab_id: Number.isNaN(labId) ? null : labId,
             submissiondate: row.submissiondate || null,
             shippingdate: row.shippingdate || null,
             casedate: row.casedate || null,
@@ -97,7 +100,7 @@ class OrdersPipeline extends BasePipeline {
 
         const sql = `
             INSERT INTO orders_stage (
-                submissiondate, shippingdate, casedate, caseid, productid,
+                lab_id, submissiondate, shippingdate, casedate, caseid, productid,
                 productdescription, quantity, productprice, patientname,
                 customerid, customername, address, phonenumber, casestatus,
                 holdreason, estimatecompletedate, requestedreturndate,
@@ -108,11 +111,12 @@ class OrdersPipeline extends BasePipeline {
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+                $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
             )
         `;
 
         const values = [
+            mappedRow.lab_id,
             mappedRow.submissiondate,
             mappedRow.shippingdate,
             mappedRow.casedate,
