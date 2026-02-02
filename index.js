@@ -86,8 +86,9 @@ module.exports = {
  * When a pipeline runs, its extractor (if any) runs first
  */
 const PIPELINE_EXTRACTORS = {
-    'dental-groups': 'dental-groups',      // SF dental-groups -> S3 -> RDS
-    'dental-practices': 'dental-practices' // SF dental-practices -> S3 -> RDS
+    'dental-groups': { type: 'salesforce', name: 'dental-groups' },
+    'dental-practices': { type: 'salesforce', name: 'dental-practices' },
+    'orders': { type: 'magictouch', name: 'orders' }
 };
 
 /**
@@ -96,19 +97,45 @@ const PIPELINE_EXTRACTORS = {
  * @returns {Promise<Object|null>} Extraction result or null if no extractor
  */
 async function runExtractorForPipeline(pipelineName) {
-    const extractorName = PIPELINE_EXTRACTORS[pipelineName];
-    if (!extractorName || !SalesforceExtractor.hasExtractor(extractorName)) {
+    const extractorConfig = PIPELINE_EXTRACTORS[pipelineName];
+    if (!extractorConfig) {
         return null;
     }
 
-    logger.info(`Running extractor before pipeline: ${extractorName}`);
-    const extractor = new SalesforceExtractor(config.salesforce, s3Handler);
-    const result = await extractor.extract(extractorName);
-    logger.info(`Extractor ${extractorName} completed`, {
-        recordCount: result.recordCount,
-        s3Key: result.s3Key
-    });
-    return result;
+    const { type, name } = extractorConfig;
+
+    // Salesforce extractor
+    if (type === 'salesforce') {
+        if (!SalesforceExtractor.hasExtractor(name)) {
+            return null;
+        }
+        logger.info(`Running Salesforce extractor before pipeline: ${name}`);
+        const extractor = new SalesforceExtractor(config.salesforce, s3Handler);
+        const result = await extractor.extract(name);
+        logger.info(`Extractor ${name} completed`, {
+            recordCount: result.recordCount,
+            s3Key: result.s3Key
+        });
+        return result;
+    }
+
+    // MagicTouch extractor
+    if (type === 'magictouch') {
+        if (!MagicTouchExtractor.hasExtractor(name)) {
+            return null;
+        }
+        logger.info(`Running MagicTouch extractor before pipeline: ${name}`);
+        const extractor = new MagicTouchExtractor(config.magictouch, s3Handler);
+        const result = await extractor.extract();
+        logger.info(`MagicTouch extractor completed`, {
+            caseCount: result.caseCount,
+            recordCount: result.recordCount,
+            s3Key: result.s3Key
+        });
+        return result;
+    }
+
+    return null;
 }
 
 // ==================== CLI Execution ====================
