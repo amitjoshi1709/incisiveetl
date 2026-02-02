@@ -7,7 +7,8 @@
  * - practiceid, dentalgroupid, dentalgroupname, address, address2, city, state, zip
  * - phone, clinicalemail, billingemail, incisiveemail, feeschedule, status
  *
- * WHERE clause: Corporate_ID__c = null (opposite of dental-groups)
+ * WHERE clause: Corporate_ID__c = null AND Parent.Corporate_ID__c != null
+ * (practices that belong to a parent group)
  */
 
 module.exports = {
@@ -18,13 +19,13 @@ module.exports = {
 
     /**
      * SOQL query to fetch dental practices from Salesforce
-     * Practices are Accounts where Corporate_ID__c is null (not part of a group)
+     * Practices are Accounts where Corporate_ID__c is null but have a Parent with Corporate_ID__c
      */
     soql: `
         SELECT
             Id,
             Practice_ID__c,
-            Corporate_ID__c,
+            Parent.Corporate_ID__c,
             Parent.Name,
             ShippingStreet,
             ShippingCity,
@@ -38,6 +39,7 @@ module.exports = {
             Status__c
         FROM Account
         WHERE Corporate_ID__c = null
+        AND Parent.Corporate_ID__c != null
         ORDER BY Name
     `.trim(),
 
@@ -51,7 +53,7 @@ module.exports = {
     mapRecord(record) {
         return {
             practiceid: record.Practice_ID__c || '',
-            dentalgroupid: record.Corporate_ID__c || '',
+            dentalgroupid: record.Parent?.Corporate_ID__c || '',
             dentalgroupname: record.Parent?.Name || '',
             address: record.ShippingStreet || '',
             address2: '',
